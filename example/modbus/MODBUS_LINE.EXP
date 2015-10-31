@@ -1,0 +1,121 @@
+
+(* @NESTEDCOMMENTS := 'Yes' *)
+(* @PATH := '\/Line Communication\/Single Line' *)
+(* @OBJECTFLAGS := '0, 8' *)
+(* @SYMFILEFLAGS := '2048' *)
+FUNCTION_BLOCK MODBUS_LINE
+(*--- INTERFACE VARIABLES -------------------------------------------------------------------------------------*)
+VAR_INPUT
+	bCOM_PORT		:	BYTE := 2;
+	SensorQuantity	:	BYTE := 1;			(* quantity of sensors *)
+	TimeOut			:	TIME := t#30ms;	(* timeout for communication *)
+END_VAR
+VAR_IN_OUT
+	Line				:	typLineInfo;		(**)
+END_VAR
+(*--- END INTERFACE VARIABLES ------------------------------------------------------------------------------*)
+
+(*--- LOCAL VARIABLES --------------------------------------------------------------------------------------------*)
+VAR
+	MB_Master		:	MODBUS_MASTER_RTU;
+	Query				:	typModbusQuery := (SlaveAddress := 1, FunctionCode := 3, StartAddress := 4, Quantity := 1, Data := 125(0) ); (* default values *)
+	Start				:	BOOL;
+	Response			:	typModbusResponse;
+
+	JobNr				:	INT := 0;
+	JobDelay			:	TON := (PT := t#30ms);
+	i					:	INT;
+	JobActive			:	BOOL;
+END_VAR
+(* @END_DECLARATION := '0' *)
+(*--- delay between  two requests -----------------------*)
+JobDelay(IN := NOT Start ); (*, PT := t#30ms);*)
+(*-------------------------------------------------------------------*)
+
+(*--- start a request  ------------------------------------------------------------------------------------*)
+IF JobDelay.Q OR ((MB_Master.MB_Error = MB_TIME_OUT) AND NOT Start) THEN (* next job  *)
+	JobNr := (JobNr MOD SensorQuantity) + 1;
+	Query.SlaveAddress := Line.Sensors[JobNr].bSlaveAddress;
+
+	Start := (Query.SlaveAddress <> 0);  (* if address <> 0 then start a request *)
+	JobActive := Start;
+END_IF
+(*----------------------------------------------------------------------------------------------------------------------------*)
+
+(*--- call the modbus master  ----------------------------------------------*)
+MB_Master(	bCOM_PORT					:= bCOM_PORT,
+				cbCOM_BAUDRATE			:= BAUD_19200,
+				cpCOM_PARITY				:= PARITY_EVEN,
+				csCOM_STOPBITS			:= STOPBITS_1,
+				cbsCOM_BYTESIZE			:= BS_8,
+				cfCOM_FLOW_CONTROL	:= HALFDUPLEX,
+				TimeOut						:= TimeOut,
+				StartFunction					:= Start,
+				Query							:= Query,
+				Response						:= Response);
+(*------------------------------------------------------------------------------------*)
+
+(*--- take over the response from sensor ----------------------------------------------------------------------------------------------*)
+IF NOT Start AND (JobNr >= 1) AND (JobNr <= MAX_SENSORS_PER_LINE) AND JobActive THEN (* job is ready *)
+	JobActive := FALSE;
+
+	(*--- special process for  address 0 ------------------------------------------------------------*)
+	IF Line.Sensors[JobNr].bSlaveAddress = 0  THEN (* Address = 0 -> erase errors *)
+		Line.Sensors[JobNr].bErrorMaster 		:= 0;
+		Line.Sensors[JobNr].bErrorSlave 		:= 0;
+		Line.Sensors[JobNr].rActualCurrent 		:= 0.0; (* delete value  *)
+		Line.Sensors[JobNr].rBargraphValue 	:= 0.0; (* delete bargraph *)
+	(*----------------------------------------------------------------------------------------------------------*)
+
+	ELSE (* take over the data  *)
+		Line.Sensors[JobNr].bErrorMaster := INT_TO_BYTE(MB_Master.MB_Error);
+		Line.Sensors[JobNr].bErrorSlave := WORD_TO_BYTE(Response.Error);
+
+		IF MB_Master.MB_Error = MB_NO_ERROR THEN (* Job OK -> no errors -> take over the value  *)
+			Line.Sensors[JobNr].rActualCurrent := INC_TO_AMPERE(Response.Data[0]); (* convert increments to ampere *)
+			(*--- scale bargraph for 125%  -------------------------------------------------------------------------------------------------------------*)
+			IF (Line.Sensors[JobNr].rInstalledCurrent > 0)  (* NO DIV 0 !!!  *)
+			AND (Line.Sensors[JobNr].rActualCurrent > 0) THEN
+
+				Line.Sensors[JobNr].rBargraphValue := (80.0 / Line.Sensors[JobNr].rInstalledCurrent) * Line.Sensors[JobNr].rActualCurrent;
+			ELSE (* !! DIV durch NULL *)
+				Line.Sensors[JobNr].rBargraphValue := Line.Sensors[JobNr].rActualCurrent;
+			END_IF
+			(*----------------------------------------------------------------------------------------------------------------------------------------------------*)
+
+		ELSE (* error -> delete values *)
+			Line.Sensors[JobNr].rActualCurrent 		:= 0.0;
+			Line.Sensors[JobNr].rBargraphValue 	:= 0.0;
+
+		END_IF
+	END_IF
+
+	ERROR_COUNTER; (* increment errorcounter  *)
+
+END_IF
+
+(*--- reset error counter ----------------------------------*)
+FOR i := 1 TO SensorQuantity DO
+	IF Line.Sensors[i].xResetErrorCounter THEN
+		Line.Sensors[i].xResetErrorCounter := FALSE;
+		Line.Sensors[i].udErrorCounter := 0;
+	END_IF
+END_FOR
+(*---------------------------------------------------------------*)
+END_FUNCTION_BLOCK
+ACTION	ERROR_COUNTER:
+(*--- check for errors  --------------------------------------------------------------------------------------------------------------------------------------*)
+Line.Sensors[JobNr].xErrorMaster 		:= (Line.Sensors[JobNr].bErrorMaster <> 0);
+Line.Sensors[JobNr].xErrorSlave 		:= (Line.Sensors[JobNr].bErrorSlave <> 0);
+Line.Sensors[JobNr].xErrorOverflow 		:= (Line.Sensors[JobNr].rActualCurrent > Line.Sensors[JobNr].rInstalledCurrent);
+Line.Sensors[JobNr].xErrorUnderflow 	:= (Line.Sensors[JobNr].rActualCurrent < Line.Sensors[JobNr].rLimitErrorCurrent);
+
+IF 	Line.Sensors[JobNr].xErrorMaster
+	OR Line.Sensors[JobNr].xErrorSlave
+	OR Line.Sensors[JobNr].xErrorOverflow
+	OR Line.Sensors[JobNr].xErrorUnderflow
+	 THEN (* increment error counter *)
+	Line.Sensors[JobNr].udErrorCounter := Line.Sensors[JobNr].udErrorCounter + 1;
+END_IF
+END_ACTION
+

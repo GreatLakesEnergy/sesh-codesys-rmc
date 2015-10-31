@@ -1,0 +1,16 @@
+
+(* @NESTEDCOMMENTS := 'Yes' *)
+(* @PATH := '\/Line Communication\/Single Line\/Helper' *)
+(* @OBJECTFLAGS := '0, 8' *)
+(* @SYMFILEFLAGS := '2048' *)
+FUNCTION INC_TO_AMPERE : REAL
+VAR_INPUT
+	IN		:	WORD;
+END_VAR
+
+(* @END_DECLARATION := '0' *)
+(* calculation from increments to ampere *)
+INC_TO_AMPERE := (80.0 		(* max. current *)
+                                       / 29126)	(* -> 32767 - 3641  Increments of the module for MAX_CURRENT *)
+						* WORD_TO_INT(IN);
+END_FUNCTION
