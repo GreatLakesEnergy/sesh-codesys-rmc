@@ -52,7 +52,7 @@ IF gv_isGenSetON THEN
 	(* is batter voltage in a good range *)
 	IF DCBatteryVoltage  >  gc_DCVoltageGenSetOFF THEN
 		(*IF DC value is below thershold for more then X threshold seconds*)
-		IF gc_DCGenCycleCount > gv_DCGenCycleCount THEN
+		IF gc_DCGenCycleCount >= gv_DCGenCycleCount THEN
 			(*t rigger dc generator OFF*)
 			gv_isGenSetON := FALSE;
 			gv_DCGenCycleCount := 0;
@@ -65,7 +65,7 @@ IF gv_isGenSetON THEN
 (*check DC (battery) against threshold value*)
 ELSIF DCBatteryVoltage < gc_DCVoltageGenSetON THEN
 		(*IF DC value is below thershold for more then X threshold seconds*)
-		IF gc_DCGenCycleCount > gv_DCGenCycleCount THEN
+		IF gv_DCGenCycleCount >= gc_DCGenCycleCount   THEN
 			(*THEN trigger relay to fire GENSET*)
 			(*t rigger dc generator OFF*)
 			gv_isGenSetON:= TRUE;
@@ -76,7 +76,7 @@ ELSIF DCBatteryVoltage < gc_DCVoltageGenSetON THEN
 
 END_IF
 
-
+gv_statusRELAY1 := gv_isGenSetON;
 END_FUNCTION_BLOCK
 
 
@@ -623,18 +623,18 @@ IF TONInst.Q THEN
 	(* get sensor reading*)
 	MBCFG_ModbusSlave(
 		dcCurrIn=>dcCurrInRaw  );
-	
-	(* Do conversions from raw numbers to real values*)
-	dcCurrIn := INC_TO_AMPERE(dcCurrInRaw);
+
+	(* Do conversions from raw numbers to real values smooth with  avereging*)
+	dcCurrIn :=  (dcCurrIn + INC_TO_AMPERE(dcCurrInRaw))/2;
 	dcCurrOut := INC_TO_AMPERE(dcCurrInRaw);
 	
-	rDCVoltage1 := INC_TO_VOLT(rDCVoltage1RAW);
+	rDCVoltage1 := (rDCVoltage1 + INC_TO_VOLT(rDCVoltage1RAW))/2;
 	rDCVoltage2:= INC_TO_VOLT(rDCVoltage2RAW);
-	
+
 	(* Power Calculations*)
-	DCPower1 := (dcCurrIn * rDCVoltage1);
+	DCPower1 := (DCPower1 + (dcCurrIn * rDCVoltage1))/2;
 	DCPower2 := (dcCurrOut * rDCVoltage2);
-	
+
 	
 	DCV1 := rDCVoltage1;
 	DCV2 := rDCVoltage2;
@@ -727,6 +727,33 @@ VAR
 END_VAR
 (* @END_DECLARATION := '0' *)
 DC_TEST();
+END_PROGRAM
+
+
+(* @NESTEDCOMMENTS := 'Yes' *)
+(* @PATH := '\/Test_Functions' *)
+(* @OBJECTFLAGS := '0, 8' *)
+(* @SYMFILEFLAGS := '2048' *)
+PROGRAM RELAY_TEST
+VAR
+	wState: BOOL :=FALSE;
+	statusRELAY AT %QX60.0: BOOL;
+END_VAR
+(* @END_DECLARATION := '0' *)
+
+
+IF NOT wState THEN
+		statusRELAY := TRUE;
+ELSE
+		statusRELAY := FALSE;
+END_IF
+
+IF wState THEN
+		wState := FALSE;
+ELSE
+		wState := TRUE;
+END_IF
+
 END_PROGRAM
 
 
@@ -1280,6 +1307,7 @@ dc_measure(
 gensetINS(DCBatteryVoltage:=DCV1);
 
 (* Call function block "MySql_Login" every cycle to monitor connection status *)
+
 oMySqlLogin(sHost:= gc_sHost,
 			uiPort:= gc_uiPort,
 			sUsername:= gc_sUser,
@@ -1405,8 +1433,6 @@ CASE wState OF
 		wState := 0;
 	END_IF
 END_CASE
-
-
 
 
 END_PROGRAM
@@ -1647,8 +1673,10 @@ VAR_GLOBAL
 	gv_iBuffCounter			:INT := 0; (* counter for  buffer*)
 	gv_iBuffPointer			:INT := 0; (* pointer  for  buffer*)
 	gv_Buffer					:ARRAY[0..gc_MaxBufferSize] OF DataPoint; (*In memory buffer of failed message attempts*)
-	gv_isGenSetON                 :BOOL;
+	gv_isGenSetON                 :BOOL := FALSE;
 	gv_DCGenCycleCount     : INT :=0 ;
+	gv_statusRELAY1 AT %QX60.0: BOOL;
+	gv_statusRELAY2 AT %QX60.1: BOOL;
 
 END_VAR
 VAR_GLOBAL CONSTANT
@@ -1671,12 +1699,12 @@ VAR_GLOBAL CONSTANT
 	raw_SQL_STR_LENGTH: INT := 350;
 
 	(* MYSQL configs *)
-	gc_sHost : STRING := '### your mysql server address here'';  (*'application.dyndns.info';*)
+	gc_sHost : STRING := '### your mysql server address here';  (*'application.dyndns.info';*)
 	gc_uiPort : UINT := 3306;
 	gc_sUser : STRING := '### your mysql server username ';
 	gc_sPwd : STRING := '### your mysql password';
-	gc_sDB : STRING := '### your MYSQL database;   	(* Optional - Name of database instance to connect to *)
-	gc_sTable:STRING := '###' your MYSql table' ;
+	gc_sDB : STRING := '### your MYSQL database';   	(* Optional - Name of database instance to connect to *)
+	gc_sTable:STRING := '### your MYSql table' ;
 
 	(* CSV Writing/Logging parameters*)
 	gc_xWriteToSD: BOOL := TRUE;
@@ -1692,8 +1720,8 @@ VAR_GLOBAL CONSTANT
 	gc_iTotalParams		:INT := 18;
 
 	(* generator constants*)
-	gc_DCVoltageGenSetON :REAL := 24;
-	gc_DCVoltageGenSetOFF :REAL := 26;
+	gc_DCVoltageGenSetON :REAL := 24; (*make this a bit higher tha load shedding time*)
+	gc_DCVoltageGenSetOFF :REAL := 26; (*make this estimate soc %80*)
 
 	(*how many cycles do we wait before we trigger the genset need to calculate based no cycletime *gc_DCGenCycleCount = total_seconds  *)
 	gc_DCGenCycleCount       :INT := 40;
