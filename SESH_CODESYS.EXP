@@ -36,7 +36,6 @@ END_PROGRAM
 (* @SYMFILEFLAGS := '2048' *)
 FUNCTION_BLOCK GENSETCheck
 VAR_INPUT
-
 	DCBatteryVoltage: REAL;
 END_VAR
 VAR_OUTPUT
@@ -46,8 +45,7 @@ END_VAR
 (* @END_DECLARATION := '0' *)
 
 
-(*Check IF GENSET is already running . IF it is do nothing as battery voltage will increase*)
-
+(*Check IF GENSET is already running . IF it is do nothing as battery voltage will increase just check if we need to turn it off*)
 IF gv_isGenSetON THEN
 	(* is batter voltage in a good range *)
 	IF DCBatteryVoltage  >  gc_DCVoltageGenSetOFF THEN
@@ -62,7 +60,7 @@ IF gv_isGenSetON THEN
 
 	END_IF
 
-(*check DC (battery) against threshold value*)
+(*check DC (battery) against threshold value to see if we need to turn on generator*)
 ELSIF DCBatteryVoltage < gc_DCVoltageGenSetON THEN
 		(*IF DC value is below thershold for more then X threshold seconds*)
 		IF gv_DCGenCycleCount >= gc_DCGenCycleCount   THEN
@@ -77,6 +75,66 @@ ELSIF DCBatteryVoltage < gc_DCVoltageGenSetON THEN
 END_IF
 
 gv_statusRELAY1 := gv_isGenSetON;
+END_FUNCTION_BLOCK
+
+
+(* @NESTEDCOMMENTS := 'Yes' *)
+(* @PATH := '\/External' *)
+(* @OBJECTFLAGS := '0, 8' *)
+(* @SYMFILEFLAGS := '2048' *)
+FUNCTION_BLOCK ThresholdTrigger
+VAR_INPUT
+
+	DCBatteryVoltage          :REAL;
+	ThresholdVoltageON    :REAL;
+	ThresholdVoltageOFF  :REAL;
+	Cycelcount                      :INT;
+	CycelcountThres		  :INT;
+	StateFlag				  :BOOL;
+
+
+END_VAR
+VAR_OUTPUT
+		StateFlagOutput		         :BOOL;
+		CycelcountOutput			  :INT;
+
+END_VAR
+VAR
+END_VAR
+(* @END_DECLARATION := '0' *)
+
+
+(*Check IF GENSET is already running . IF it is do nothing as battery voltage will increase*)
+
+IF StateFlag THEN
+	(* is batter voltage in a good range *)
+	IF DCBatteryVoltage  >  ThresholdVoltageOFF THEN
+		(*IF DC value is below thershold for more then X threshold seconds*)
+		IF CycelcountThres = Cycelcount THEN
+			(*t rigger dc generator OFF*)
+			StateFlag := FALSE;
+			Cycelcount := 0;
+		ELSE
+			Cycelcount := Cycelcount + 1;
+		END_IF
+
+	END_IF
+
+(*check DC (battery) against threshold value*)
+ELSIF DCBatteryVoltage < ThresholdVoltageON THEN
+		(*IF DC value is below thershold for more then X threshold seconds*)
+		IF Cycelcount = CycelcountThres   THEN
+			(*THEN trigger relay to fire GENSET*)
+			(*t rigger dc generator OFF*)
+			StateFlag:= TRUE;
+			Cycelcount := 0;
+		ELSE
+			Cycelcount := Cycelcount + 1;
+		END_IF
+
+END_IF
+CycelcountOutput := Cycelcount;
+StateFlagOutput := StateFlag;
 END_FUNCTION_BLOCK
 
 
@@ -116,7 +174,7 @@ VAR_INPUT
 END_VAR
 
 VAR_OUTPUT
-           dcCurrIn       :    INT;       (**) 
+           dcCurrIn       :    INT;       (**)
 
 
     (*--- system variables (read only) -------------------------*)
@@ -231,360 +289,6 @@ END_FUNCTION
 (* @PATH := '\/POWER_MEASURMENT' *)
 (* @OBJECTFLAGS := '0, 8' *)
 (* @SYMFILEFLAGS := '2048' *)
-PROGRAM POWER_MEASUREMENT_AC
-VAR
-	Typ_750_494_State: typ_750_494_State;
-	abIn_750_494 AT %IB72 : ARRAY [0..23] OF BYTE;
-       abOut_750_494 AT %QB72:  ARRAY [0..23] OF BYTE;
-	bToken: BYTE;
-	POWER_MEASURE: Fb_750_494_AC_Compact_01;
-
-END_VAR
-VAR_OUTPUT
-	totalPower: REAL;
-	totalReactivePower: REAL;
-	totalApparentPower: REAL;
-	rotatingField: BOOL;
-	totalPowerFactor: REAL;
-	totalActiveEnergy: REAL;
-	totalReactiveEnergy: REAL;
-	totalApparentEnergy: REAL;
-	arCurrent: ARRAY [1..3] OF REAL;
-	arVoltage: ARRAY [1..3] OF REAL;
-	arFrequency: ARRAY [1..3] OF REAL;
-	isPowerReady: BOOL;
-END_VAR
-(* @END_DECLARATION := '0' *)
-_CFC_BODY
-_ELEMENT
-_ID: 7
-_MACROID: -1
-_POS: 25, 8
-_TYPE: _INPUT
-_TEXT: TRUE
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_ELEMENT
-_ID: 6
-_MACROID: -1
-_POS: 25, 6
-_TYPE: _BOX
-_INSTANCE: 1
-_INSTANCENAME: POWER_MEASURE
-_TYPENAME: Fb_750_494_AC_Compact_01
-_ENENO: 0
-_INPUTS: 7
-_IN
-_INPUTID: 7
-_INPUTIDX: 0
-_NEGATE: 0
-_END
-_IN
-_INPUTID: 0
-_INPUTIDX: 0
-_NEGATE: 0
-_END
-_IN
-_INPUTID: 0
-_INPUTIDX: 0
-_NEGATE: 0
-_END
-_IN
-_INPUTID: 10
-_INPUTIDX: 0
-_NEGATE: 0
-_END
-_IN
-_INPUTID: 11
-_INPUTIDX: 0
-_NEGATE: 0
-_END
-_IN
-_INPUTID: 12
-_INPUTIDX: 0
-_NEGATE: 0
-_END
-_IN
-_INPUTID: 13
-_INPUTIDX: 0
-_NEGATE: 0
-_END
-_OUTPUTS: 24
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_OUT
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_PARAMETERS: 0
-_END
-_ELEMENT
-_ID: 45
-_MACROID: -1
-_POS: 42, 8
-_TYPE: _OUTPUT
-_TEXT: isPowerReady
-_INPUTID: 6
-_INPUTIDX: 0
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 32
-_MACROID: -1
-_POS: 43, 9
-_TYPE: _OUTPUT
-_TEXT: totalPower
-_INPUTID: 6
-_INPUTIDX: 1
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 10
-_MACROID: -1
-_POS: 25, 11
-_TYPE: _INPUT
-_TEXT: Typ_750_494_State
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_ELEMENT
-_ID: 11
-_MACROID: -1
-_POS: 25, 12
-_TYPE: _INPUT
-_TEXT: abIn_750_494
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_ELEMENT
-_ID: 12
-_MACROID: -1
-_POS: 25, 13
-_TYPE: _INPUT
-_TEXT: abOut_750_494
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_ELEMENT
-_ID: 13
-_MACROID: -1
-_POS: 25, 14
-_TYPE: _INPUT
-_TEXT: bToken
-_NEGATE: 0
-_CONNECTOR: 
-_END
-_ELEMENT
-_ID: 34
-_MACROID: -1
-_POS: 44, 10
-_TYPE: _OUTPUT
-_TEXT: totalReactivePower
-_INPUTID: 6
-_INPUTIDX: 2
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 35
-_MACROID: -1
-_POS: 43, 11
-_TYPE: _OUTPUT
-_TEXT: totalApparentPower
-_INPUTID: 6
-_INPUTIDX: 3
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 36
-_MACROID: -1
-_POS: 46, 12
-_TYPE: _OUTPUT
-_TEXT: totalPowerFactor
-_INPUTID: 6
-_INPUTIDX: 4
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 37
-_MACROID: -1
-_POS: 47, 13
-_TYPE: _OUTPUT
-_TEXT: totalActiveEnergy
-_INPUTID: 6
-_INPUTIDX: 5
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 38
-_MACROID: -1
-_POS: 48, 14
-_TYPE: _OUTPUT
-_TEXT: totalReactiveEnergy
-_INPUTID: 6
-_INPUTIDX: 6
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 39
-_MACROID: -1
-_POS: 49, 15
-_TYPE: _OUTPUT
-_TEXT: totalApparentEnergy
-_INPUTID: 6
-_INPUTIDX: 7
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 40
-_MACROID: -1
-_POS: 50, 16
-_TYPE: _OUTPUT
-_TEXT: rotatingField
-_INPUTID: 6
-_INPUTIDX: 8
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 41
-_MACROID: -1
-_POS: 51, 17
-_TYPE: _OUTPUT
-_TEXT: arCurrent
-_INPUTID: 6
-_INPUTIDX: 9
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 42
-_MACROID: -1
-_POS: 52, 18
-_TYPE: _OUTPUT
-_TEXT: arVoltage
-_INPUTID: 6
-_INPUTIDX: 11
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-_ELEMENT
-_ID: 43
-_MACROID: -1
-_POS: 53, 19
-_TYPE: _OUTPUT
-_TEXT: arFrequency
-_INPUTID: 6
-_INPUTIDX: 19
-_NEGATE: 0
-_SETRESET: _NONE
-_END
-
-END_PROGRAM
-
-
-(* @NESTEDCOMMENTS := 'Yes' *)
-(* @PATH := '\/POWER_MEASURMENT' *)
-(* @OBJECTFLAGS := '0, 8' *)
-(* @SYMFILEFLAGS := '2048' *)
 FUNCTION_BLOCK POWER_MEASURMENT_DC
 VAR_INPUT
 	tCycleTime						: TIME:=t#1s;					(* Cycletime for reading values*)
@@ -608,7 +312,7 @@ VAR
 	rDCVoltage1: REAL;
 	rDCVoltage2:REAL;
 
-	dcCurrInRaw : INT;
+	dcCurrInRaw  : INT ;
 	dcCurrOutRaw :INT;
 
 	dcCurrIn:REAL;
@@ -679,12 +383,12 @@ VAR
 
 	(* Functionblock to contact MySql server *)
 	oMySqlLogin : MySql_Login;
-	sHost : STRING := 'sesh-dev1.cloudapp.net';  (*'application.dyndns.info';*)
-	uiPort : UINT := 3306;
-	sUser : STRING := 'wago1';
-	sPwd : STRING := 'gle12345';
-	sDB : STRING := 'sesh_DB';   	(* Optional - Name of database instance to connect to *)
-	sTable:STRING := 'AC_POWER';
+	sHost : STRING :='youre_database';  (*'application.dyndns.info';*)
+	uiPort : UINT := your_db_port;
+	sUser : STRING := 'username;
+	sPwd : STRING := 'password';
+	sDB : STRING := 'DB';   	(* Optional - Name of database instance to connect to *)
+	sTable:STRING := 'db_table';
 	xConnect : BOOL := TRUE;
 	diErrorLogin : DINT;
 	sStatusLogin : STRING(500);
@@ -722,11 +426,122 @@ END_PROGRAM
 (* @SYMFILEFLAGS := '2048' *)
 PROGRAM PLC_PRG
 VAR
-	rDCVoltage1 : ARRAY [0..23] OF BYTE;
-	rDCVoltage2 : ARRAY [0..23] OF BYTE;
+
+	SERIAL_MODBUS_MASTER: MODBUS_MASTER_RTU;
+	error: enumMB_ERROR;
+	Query					:	typModbusQuery;
+	Response				:	typModbusResponse;
+
+	MODBUSCOM_AAN_UIT: BOOL;
+	R_TRIG1: R_TRIG;
+	start: BOOL;
+
+	bCOM_PORT					:	BYTE					:=2 ; (*Port / module nummer*)
+	cbBAUDRATE					:	COM_BAUDRATE 		:=BAUD_19200; (*Instelling IO Check*)
+	cpPARITY						:	COM_PARITY 				:= PARITY_EVEN; (*Instelling IO Check*)
+	csSTOPBITS					:	COM_STOPBITS 			:= STOPBITS_1; (*Instelling IO Check*)
+	cbsBYTESIZE					:	COM_BYTESIZE 			:=BS_8 ; (*Instelling IO Check*)
+	cfFLOW_CONTROL			:	COM_FLOW_CONTROL 	:= HALFDUPLEX ; (*Instelling IO Check*)
+
+
 END_VAR
 (* @END_DECLARATION := '0' *)
-DC_TEST();
+_FBD_BODY
+_NETWORKS : 2
+_NETWORK
+
+_COMMENT
+''
+_END_COMMENT
+_ASSIGN
+_FUNCTIONBLOCK
+R_TRIG1
+_BOX_EXPR : 1
+_OPERATOR
+_BOX_EXPR : 2
+_OPERAND
+_EXPRESSION
+_POSITIV
+MODBUSCOM_AAN_UIT
+_OPERAND
+_EXPRESSION
+_NEGATIV
+start
+_EXPRESSION
+_POSITIV
+AND
+_EXPRESSION
+_POSITIV
+R_TRIG
+_OUTPUTS : 0
+_EXPRESSION
+_POSITIV
+_OUTPUTS : 1
+_OUTPUT
+_POSITIV
+_SET
+start
+_NETWORK
+
+_COMMENT
+''
+_END_COMMENT
+_ASSIGN
+_FUNCTIONBLOCK
+SERIAL_MODBUS_MASTER
+_BOX_EXPR : 10
+_OPERAND
+_EXPRESSION
+_POSITIV
+bCOM_PORT
+_OPERAND
+_EXPRESSION
+_POSITIV
+cbBAUDRATE
+_OPERAND
+_EXPRESSION
+_POSITIV
+cpPARITY
+_OPERAND
+_EXPRESSION
+_POSITIV
+csSTOPBITS
+_OPERAND
+_EXPRESSION
+_POSITIV
+cbsBYTESIZE
+_OPERAND
+_EXPRESSION
+_POSITIV
+cfFLOW_CONTROL
+_OPERAND
+_EXPRESSION
+_POSITIV
+T#500ms
+_OPERAND
+_EXPRESSION
+_POSITIV
+start
+_OPERAND
+_EXPRESSION
+_POSITIV
+Query
+_OPERAND
+_EXPRESSION
+_POSITIV
+Response
+_EXPRESSION
+_POSITIV
+MODBUS_MASTER_RTU
+_OUTPUTS : 0
+_EXPRESSION
+_POSITIV
+_OUTPUTS : 1
+_OUTPUT
+_POSITIV
+_NO_SET
+error
+
 END_PROGRAM
 
 
@@ -768,14 +583,9 @@ END_VAR
 VAR_INPUT
 
 	iSiteCode: INT;
-	rTotalActivePower					: REAL;						(* Tota lActive Power 														II Wirkleistung gesamt *)
-	rTotalReactivePower				: REAL;						(* Total Reactive Power													II Blindleistung gesamt *)
 	rTotalApparentPower				: REAL;						(* Total Apparent Power													II Scheinleistung gesamt *)
 	rTotalPowerFactorPF				: REAL;						(* Total Power Factor PF 													II Leistungsfaktor_PF gesamt *)
-	rTotalActiveEnergy				: REAL;						(* Total Active Energy	 													II Wirkenergie gesamt *)
-	rTotalReactiveEnergy				: REAL;						(* Total Reactive Energy 													II Blindenergie gesamt *)
-	rTotalApparentEnergy				: REAL;						(* Total Apparent Energy 													II Scheinenergie gesamt *)
-	xRotatingField						: BOOL;						(* Rotating Field 															II Drehfeld rechts *)
+
 	arFrequency						: ARRAY[1..3] OF REAL;		(* Frequency																II Frequenz *)
 	arVoltage_L_N					: ARRAY[1..3] OF REAL;		(* Voltage L-N 																II Spannung Lx N *)
 	arCurrent							: ARRAY[1..3] OF REAL;		(* Current 															   		II Strom *)
@@ -797,26 +607,24 @@ VAR
 END_VAR
 (* @END_DECLARATION := '0' *)
 	arCurrDataPoint.iSiteCode := iSiteCode;
-	arCurrDataPoint.rTotalActivePower :=rTotalActivePower;
-	arCurrDataPoint.rTotalReactivePower:=rTotalReactivePower;
 	arCurrDataPoint.rTotalApparentPower:=rTotalApparentPower;
 	arCurrDataPoint.rTotalPowerFactorPF:=rTotalPowerFactorPF;
-	arCurrDataPoint.rTotalActiveEnergy:=rTotalActiveEnergy;
-	arCurrDataPoint.rTotalReactiveEnergy:=rTotalReactiveEnergy;
-	arCurrDataPoint.xRotatingField:=xRotatingField;
-
 
 	arCurrDataPoint.arFrequency_1:=arFrequency[1];
 	arCurrDataPoint.arVoltage_L_N_1:=arVoltage_L_N[1];
 	arCurrDataPoint.arCurrent_1:=arCurrent[1];
+	arCurrDataPoint.arPower_1:=arCurrDataPoint.arCurrent_1*arCurrDataPoint.arVoltage_L_N_1;
 
 	arCurrDataPoint.arFrequency_2:=arFrequency[2];
 	arCurrDataPoint.arVoltage_L_N_2:=arVoltage_L_N[2];
 	arCurrDataPoint.arCurrent_2:=arCurrent[2];
+	arCurrDataPoint.arPower_2:=arCurrDataPoint.arCurrent_2*arCurrDataPoint.arVoltage_L_N_2;
+
 
 	arCurrDataPoint.arFrequency_3:=arFrequency[3];
 	arCurrDataPoint.arVoltage_L_N_3:=arVoltage_L_N[3];
 	arCurrDataPoint.arCurrent_3:=arCurrent[3];
+	arCurrDataPoint.arPower_3:=arCurrDataPoint.arCurrent_3*arCurrDataPoint.arVoltage_L_N_3;
 
 	arCurrDataPoint.timeStamp := Get_Time();
 
@@ -829,27 +637,6 @@ END_VAR
 
 
 	Create_Data_Point := arCurrDataPoint;
-END_FUNCTION
-
-
-(* @NESTEDCOMMENTS := 'Yes' *)
-(* @PATH := '\/Utils' *)
-(* @OBJECTFLAGS := '0, 8' *)
-(* @SYMFILEFLAGS := '2048' *)
-FUNCTION Create_Path : STRING
-VAR_INPUT
-END_VAR
-VAR
-	sFilePath: STRING;
-END_VAR
-(* @END_DECLARATION := '0' *)
-IF gc_xWriteToSD THEN
-	sFilePath := '/media/sd/';
-ELSE
-	sFilePath := '';
-END_IF
-
-Create_Path := CONCAT(sFilePath, gc_sFileName);
 END_FUNCTION
 
 
@@ -896,250 +683,13 @@ TimeStamp := CONCAT(TimeStamp,INT_TO_STRING(iMinutes));
 TimeStamp := CONCAT(TimeStamp,INT_TO_STRING(iSeconds));
 TimeStamp := CONCAT(TimeStamp,'Z');
 
+(* return timestamp created *)
 Get_Time := TimeStamp;
 
 
 
 
 END_FUNCTION
-
-
-(* @NESTEDCOMMENTS := 'Yes' *)
-(* @PATH := '\/Utils' *)
-(* @OBJECTFLAGS := '0, 8' *)
-(* @SYMFILEFLAGS := '2048' *)
-(*---------------------------------------------------------------------------------------
-  WAGO Kontakttechnik GmbH Hansastr. 27 32423 Minden(Westf.) 
-  Tel. +49571/887-0 Fax. +49571/887-0                
-                                                                                                
-  Project: IEC1131 internal library
-  
-  Function: MEMCPY
-  Description: This function copies BytesToCopy bytes from the source
-                         address pSourceAddress to the destination address
-                         pDestinationAddress
-  Date: 25.09.2000
-
-------------------------------------------------------------------------------------------*)
-FUNCTION MEMCPY:BOOL
-VAR_INPUT
-	pSourceAddress:							POINTER TO ARRAY[1..2] OF BYTE;
-	pDestinationAddress:						POINTER TO ARRAY[1..2] OF BYTE;
-	BytesToCopy:								DINT;
-END_VAR
-VAR
-END_VAR
-(* @END_DECLARATION := '0' *)
-WHILE (BytesToCopy > 0) DO
-	pDestinationAddress^[1]:=pSourceAddress^[1]; (* copy bytes from source to destination *)
-	pDestinationAddress:=ADR(pDestinationAddress^[2]); (* increment destination *)
-	pSourceAddress:=ADR(pSourceAddress^[2]);(* increment source *)
-	BytesToCopy:=BytesToCopy -1; (* decrement number of bytes to copy *)
-END_WHILE
-END_FUNCTION
-
-
-(* @NESTEDCOMMENTS := 'Yes' *)
-(* @PATH := '\/Utils' *)
-(* @OBJECTFLAGS := '0, 8' *)
-(* @SYMFILEFLAGS := '2048' *)
-PROGRAM ReadCSVFile
-VAR_INPUT
-	sFilename		:STRING;
-	bSeperator		:BYTE:=59;(*seperator semicolon:59=;*)
-END_VAR
-VAR_IN_OUT
-	xStart			:BOOL;
-	typData			:ARRAY [1..iMaxParams] OF  typCSV;
-END_VAR
-VAR_OUTPUT
-	sStatus			:STRING;
-END_VAR
-VAR
-	bEndOfFile		:BYTE:=13;
-	FileIdent		:DWORD;
-	rawdata			:ARRAY[0..gc_RawDataSize] OF BYTE;
-	filesizev		:DINT;
-	tempstring		:STRING;
-	startposition	:INT;
-	i				:INT;
-	j				:INT;
-	k				:INT;
-END_VAR
-(* @END_DECLARATION := '0' *)
-IF xStart THEN
-	FileIdent:=SysFileOpen(FileName:=sFilename, Mode:='r');
-	IF fileident<>0 THEN
-		SysFileRead(File:=Fileident, Buffer:=ADR(rawdata), Size:=SIZEOF(rawdata));
-		filesizev:=SysFileGetSize(FileName:=sFilename);
-		IF filesizev>gc_RawDataSize THEN
-			filesizev:=gc_RawDataSize;
-		END_IF
-		SysFileClose(File:=fileident);(*this function is blocking*)
-	ELSE
-		sStatus:='File does not exist';
-		xStart:=FALSE;
-		RETURN;(*no such file available*)
-	END_IF
-(*copy data to typData array*)
-	startposition:=0;
-	i:=0;
-	FOR j:=1 TO iMaxParams DO
-		(*First value in dataset is of type DT. The following value is seperated by bSeperator*)
-		WHILE rawdata[startposition+i]<>bSeperator DO
-			i:=i+1;
-		END_WHILE
-		rawdata[startposition+i]:=0;
-		MEMCPY(pSourceAddress:=ADR(rawdata[startposition]), pDestinationAddress:=ADR(tempstring), BytesToCopy:=i+1);
-		typdata[j].sDescription:=tempstring;
-		startposition:=startposition+i+1;
-		i:=0;
-		(*The parameter values are of type word. The following values are seperated by bSeperator*)
-		FOR k:=1 TO gc_ParameterCount-1 DO
-			WHILE rawdata[startposition+i]<>bSeperator DO
-				i:=i+1;
-			END_WHILE
-			rawdata[startposition+i]:=0;
-			MEMCPY(pSourceAddress:=ADR(rawdata[startposition]), pDestinationAddress:=ADR(tempstring), BytesToCopy:=i+1);
-			typdata[j].Parameter[k]:=STRING_TO_REAL(tempstring);
-			startposition:=startposition+i+1;
-			i:=0;
-		END_FOR
-		(*Copying the last parameter from typ word. The data set is terminated by CR LF*)
-		WHILE rawdata[startposition+i]<>bEndOfFile DO
-			i:=i+1;
-		END_WHILE
-		rawdata[startposition+i]:=0;
-		MEMCPY(pSourceAddress:=ADR(rawdata[startposition]), pDestinationAddress:=ADR(tempstring), BytesToCopy:=i+1);
-		typdata[j].Parameter[k]:=STRING_TO_REAL(tempstring);
-		startposition:=startposition+i+2;(*The data set is terminated by CR LF(13,10)*)
-		i:=0;
-	END_FOR
-(*copy data to typData array finished*)
-	sStatus:='Data read OK';
-	xStart:=FALSE;
-END_IF
-END_PROGRAM
-
-
-(* @NESTEDCOMMENTS := 'Yes' *)
-(* @PATH := '\/Utils' *)
-(* @OBJECTFLAGS := '0, 8' *)
-(* @SYMFILEFLAGS := '2048' *)
-PROGRAM WriteCSVFile
-(* 	This function block Writes the contents of the data structure to a CSV File
-
-	Required Libraries:
-		Standard.lib
-		SysLibFile.lib
-*)
-VAR_INPUT
-	sFILENAME 		:STRING(80); (* Filename to store data to (e.g. 'config.csv' 		*)
-	toWrite  			:STRING(500);
-	bSeperator		:BYTE :=59;	(* Seperator semicolon:59=;*)
-END_VAR
-VAR_IN_OUT
-	xStart 			:BOOL;	(* Set TRUE to write data, set False to stop.		 *)
-END_VAR
-VAR_OUTPUT
-	sStatus			:STRING;
-	iError 			:INT;	(* 00 : Normal Operation	*)
-							(* 90 : Can't Open File 	*)
-							(* 91 : Can't Close File 	*)
-							(* 92 : Can't Write to File 	*)
-END_VAR
-VAR
-	FileOpen		:BOOL := FALSE;
-	handle			:DWORD;
-	Mode			:STRING[20] := 'rw'; (* read/write *)
-	DataString 		:STRING(80);
-	i				:INT;
-END_VAR
-(* @END_DECLARATION := '0' *)
-IF xStart THEN
-	sStatus := 'Try to open file';
-	IF NOT FileOpen THEN
-		(* Open File *)
-		handle := SysFileOpen(sFileName, Mode);
-		IF handle > 0 THEN
-			FileOpen := TRUE;
-			sStatus := 'File Open OK.';
-		ELSE
-			iERROR := 90; (* Could not open file. *)
-			sStatus := 'Could not open file.';
-		END_IF
-	END_IF
-
-	IF FileOpen THEN
-				IF SysFileWrite(handle, ADR(toWrite), LEN(toWrite)) = 0 THEN
-					iERROR := 92; (* Could not write to file *)
-					sStatus := 'Could not write file.';
-				END_IF
-	END_IF
-
-	IF FileOpen THEN
-		(* Close file *)
-		IF SysFileClose(handle) THEN
-			FileOpen := FALSE;
-			sStatus := 'File Saved.';
-		ELSE
-			iERROR := 91; (* Could not close file *)
-			sStatus := 'Could not close file.';
-		END_IF
-		xStart := FALSE;
-	END_IF
-END_IF
-END_PROGRAM
-
-
-(* @NESTEDCOMMENTS := 'Yes' *)
-(* @PATH := '' *)
-(* @OBJECTFLAGS := '0, 8' *)
-(* @SYMFILEFLAGS := '2048' *)
-FUNCTION_BLOCK Log_to_CSV
-VAR_INPUT
-(*array of data we wish to log to CSV, each data type should be in a seperate CSV?*)
-	arToLogData:         ARRAY[1..gc_iTotalParams] OF REAL;
-
-END_VAR
-VAR_OUTPUT
-END_VAR
-VAR
-	(*CSV logging variables*)
-	(* TODO clean this up removed unused variables*)
-	xLoad			: BOOL; (* Initiate load operation *)
-	xSave			: BOOL; (* Initiate save operation *)
-	sLoadStatus		: STRING; (* Feedback on load *)
-	sSaveStatus		: STRING; (* Feedback on save *)
-	ConfigData		: ARRAY [1..iMaxParams] OF  typCSV; (* Structure with the config data being loaded or saved *)
-	bufferString		:STRING(500);
-	bSeperator 		: BYTE := 59; (* Semicolon (;) is the seperator between parameter and value. *)
-	iError			: INT; (* Error Code for Save *)
-
-	sFilePath		: STRING; (* SD card is S:\, Internal Path is blank, but this points to the PLC folder *)
-
-	i: INT;
-END_VAR
-(* @END_DECLARATION := '0' *)
-sFilePath := Create_Path();
-
-(* initializse buffer log value *)
-bufferString := CONCAT(bufferString , INT_TO_STRING(gv_iBuffCounter) );
-bufferString := CONCAT(bufferString , ',' );
-
-(* take the data in array and convert into CSV string format*)
-FOR i:=0 TO gc_iTotalParams - 1 DO
-	bufferString := CONCAT(bufferString , REAL_TO_STRING(arToLogData[i]));
-	bufferString := CONCAT(bufferString , ',' );
-
-	bufferString := CONCAT(bufferString,ASCIIBYTE_TO_STRING(13)); (* CR *)
-	bufferString := CONCAT(bufferString,ASCIIBYTE_TO_STRING(10)); (* LF *)
-
-END_FOR
-(* function call isn't working right now*)
-(*WriteCSVFile(sFilePath,bufferString);*)
-gv_iBuffCounter := + 1;
-END_FUNCTION_BLOCK
 
 
 (* @NESTEDCOMMENTS := 'Yes' *)
@@ -1179,7 +729,8 @@ VAR
 
 	(*Genset*)
 	gensetINS :GENSETCheck;
-
+	loadShedIns: ThresholdTrigger;
+	genSetIns: ThresholdTrigger;
 
 	(* Output DC variables *)
 	dc_measure : POWER_MEASURMENT_DC;
@@ -1204,6 +755,7 @@ VAR
 	arFrequency						: ARRAY[1..3] OF REAL;		(* Frequency																II Frequenz *)
 	arVoltage_L_N					: ARRAY[1..3] OF REAL;		(* Voltage L-N 																II Spannung Lx N *)
 	arCurrent							: ARRAY[1..3] OF REAL;		(* Current 															   		II Strom *)
+	arPower_L_N					: ARRAY[1..3] OF REAL;
 	abFeedback						: ARRAY[1..8] OF BYTE;		(*	0   = no Error 															II kein Fehler
 																			1   = Invalid values measure ID 										II Einträge MID nicht gültig
 																			2   = Timeout
@@ -1304,7 +856,33 @@ dc_measure(
 	DCCurr2=>DCCurr2 );
 
 (*check genset situation*)
+(*
 gensetINS(DCBatteryVoltage:=DCV1);
+*)
+(*check battery voltage for genset trigger*)
+loadShedIns(DCBatteryVoltage:=DCV1,
+					ThresholdVoltageON:=gc_DCVoltageGenSetON,
+					ThresholdVoltageOFF:=gc_DCVoltageGenSetOFF,
+					Cycelcount:=gv_DCGenCycleCount,
+					CycelcountThres:=gc_DCGenCycleCount,
+					StateFlag:=gv_isGenSetON,
+					StateFlagOutput=>gv_isGenSetON,
+					CycelcountOutput=>gv_DCGenCycleCount
+					);
+(* fire off any relays if we need to *)
+gv_statusRELAY1 := gv_isGenSetON;
+
+(*check battery for load shedding *)
+gensetINS(DCBatteryVoltage:=DCV1,
+					ThresholdVoltageON := gc_LoadSheddingVoltageON,
+					ThresholdVoltageOFF := gc_LoadSheddingVoltageOFF,
+					Cycelcount :=	gv_DCLoadCycleCount,
+					CycelcountThres := gc_DCLoadCycleCount,
+					StateFlag  :=  gv_isLoadShedON,
+					StateFlagOutput  =>  gv_isLoadShedON,
+					CycelcountOutput  =>  gv_DCLoadCycleCount
+					);
+gv_statusRELAY1 := gv_statusRELAY1;
 
 (* Call function block "MySql_Login" every cycle to monitor connection status *)
 
@@ -1348,14 +926,8 @@ CASE wState OF
 	ELSE
 		arCurrDataPoint := Create_Data_Point (
 													iSiteCode:=gc_iSiteCode,
-													rTotalActivePower:=rTotalActivePower,
-													rTotalReactivePower:=rTotalReactivePower,
 													rTotalApparentPower:=rTotalApparentPower,
 													rTotalPowerFactorPF:=rTotalPowerFactorPF,
-													rTotalActiveEnergy:=rTotalActiveEnergy,
-													rTotalReactiveEnergy:=rTotalReactiveEnergy,
-													rTotalApparentEnergy:=rTotalApparentEnergy,
-													xRotatingField:=xRotatingField,
 													arFrequency:=arFrequency,
 													arVoltage_L_N:=arVoltage_L_N,
 													arCurrent:=arCurrent,
@@ -1408,8 +980,8 @@ CASE wState OF
 45: (* Wait here to debug convert problem *)
 	(* buffer current value into memory *)
 	IF gv_iBuffCounter < gc_MaxBufferSize THEN
-		gv_Buffer[gv_iBuffCounter] := arCurrDataPoint;
-		gv_iBuffCounter := gv_iBuffCounter + 1;
+		gv_Buffer[gv_iBuffCounter] := arCurrDataPoint; (* add data point to our buffer *)
+		gv_iBuffCounter := gv_iBuffCounter + 1; (* incremenr buffer counter *)
 		hasBufferedItems := TRUE; (*Flag indicating the status of the buffer *)
 	END_IF
 	wState := 46; (*move onto sleep*)
@@ -1442,44 +1014,6 @@ END_PROGRAM
 (* @PATH := '' *)
 (* @OBJECTFLAGS := '0, 8' *)
 (* @SYMFILEFLAGS := '2048' *)
-FUNCTION SPLIT_TO_STR_ARRAY : ARRAY [0..gcMySql_iSqlUpperBound] OF STRING(gcMySql_iSqlLength)
-VAR_INPUT
-	sInputString :      STRING;
-	iSizeSplit   :      INT;
-
-END_VAR
-VAR
-
-	tempARR: ARRAY [0..gcMysql_iSqlUpperBound] OF STRING(gcMySql_iSqlLength);		(*Temporarry array to merge results	*)
-	i: INT := 0;
-	iBeginPointer: INT := 0;
-	iArraySizeCheck: INT;
-
-END_VAR
-(* @END_DECLARATION := '0' *)
-(*not using this creatring array maually instead as it doesn't simplify anything*)
-
-iArraySizeCheck := LEN(sInputString) / iSizeSplit; (* We need to see how many slices of the string we will have*)
-
-IF iArraySizeCheck < gcMySql_iSqlUpperBound THEN (* Check that the array we have has enough space to fit these strings*)
-	WHILE i  <  gcMysql_iSqlUpperBound  DO
-		tempARR[i] := MID( sInputString , iSizeSplit, iBeginPointer);
-		i :=  i + 1;
-		iBeginPointer := IBeginPointer + iSizeSplit;
-
-	END_WHILE
-	SPLIT_TO_STR_ARRAY := tempARR;
-
-END_IF
-
-
-END_FUNCTION
-
-
-(* @NESTEDCOMMENTS := 'Yes' *)
-(* @PATH := '' *)
-(* @OBJECTFLAGS := '0, 8' *)
-(* @SYMFILEFLAGS := '2048' *)
 FUNCTION SQLStatement : ARRAY [0..gcMySql_iSqlUpperBound] OF STRING(gcMySql_iSqlLength)
 VAR_INPUT
 
@@ -1499,7 +1033,7 @@ VAR
 	arFrequency						: ARRAY[1..3] OF REAL;		(* Frequency																II Frequenz *)
 	arVoltage_L_N					: ARRAY[1..3] OF REAL;		(* Voltage L-N 																II Spannung Lx N *)
 	arCurrent							: ARRAY[1..3] OF REAL;		(* Current 															   		II Strom *)
-
+	arPower							: ARRAY[1..3] OF REAL;		(* AC Power *)
 	DCV1 :REAL;
 	DCV2 :REAL;
 
@@ -1528,59 +1062,62 @@ iSiteCode := toLog.iSiteCode;
 
 		(*AC Daat point *)
 		(*TODO time stamp needs to be added if buffered data *)
-		rTotalActivePower := toLog.rTotalActivePower;
-		rTotalReactivePower := toLog.rTotalReactivePower;
 		rTotalApparentPower := toLog.rTotalApparentPower;
 		rTotalPowerFactorPF := toLog.rTotalPowerFactorPF;
-		rTotalActiveEnergy := toLog.rTotalActiveEnergy;
-		rTotalApparentEnergy := toLog.rTotalApparentEnergy;
-		xRotatingField := toLog.xRotatingField;
+
 		arFrequency[1] := toLog.arFrequency_1;
 		arVoltage_L_N[1] := toLog.arVoltage_L_N_1;
 		arCurrent[1] := toLog.arCurrent_1;
+  	       arPower[1] := toLog.arPower_1;
+
 		arFrequency[2] := toLog.arFrequency_2;
 		arVoltage_L_N[2] := toLog.arVoltage_L_N_2;
 		arCurrent[2] := toLog.arCurrent_2;
+		arPower[2] := toLog.arPower_2;
+
 		arFrequency[3] := toLog.arFrequency_3;
 		arVoltage_L_N[3] := toLog.arVoltage_L_N_3;
 		arCurrent[3] := toLog.arCurrent_3;
-		
+		arPower[3] := toLog.arPower_3;
+
 		SQLStatement[0] := 'INSERT INTO ';
 		SQLStatement[1] := s_Table;
-		SQLStatement[2] :=  ' ( rTotalActivePower , rTotalReactivePower , rTotalApparentPower, rTotalPowerFactorPF, rTotalActiveEnergy, rTotalReactiveEnergy, rTotalApparentEnergy,  xRotatingField, arFrequency1 , arFrequency2 ,arFrequency3,arVoltage_L_N1,arVoltage_L_N2, arVoltage_L_N3, arCurrent1,arCurrent2,arCurrent3,DCVolt1,DCVolt2,DCCurr1,DCCurr2 ,DCPower1,DCPower2,iSiteCode)  VALUES ( ';
+		SQLStatement[2] :=  ' (rTotalApparentPower, rTotalPowerFactorPF, arFrequency1 , arFrequency2 ,arFrequency3,arVoltage_L_N1,arVoltage_L_N2, arVoltage_L_N3, arCurrent1,arCurrent2,arCurrent3,DCVolt1,DCVolt2,DCCurr1,DCCurr2 ,DCPower1,DCPower2,iSiteCode,acPower1,acPower2,acPower3)  VALUES ( ';
 		(* AC Values *)
-		SQLStatement[3] :=  CONCAT(REAL_TO_STRING(rTotalActivePower), ',');
-		SQLStatement[4] :=  CONCAT(REAL_TO_STRING(rTotalReactivePower), ',');
-		SQLStatement[5] :=  CONCAT(REAL_TO_STRING(rTotalApparentPower), ',');
-		SQLStatement[6] :=  CONCAT(REAL_TO_STRING(rTotalPowerFactorPF), ',');
-		SQLStatement[7] :=  CONCAT(REAL_TO_STRING(rTotalActiveEnergy), ',');
-		SQLStatement[8] :=  CONCAT(REAL_TO_STRING(rTotalReactiveEnergy), ',');
-		SQLStatement[9] :=  CONCAT(REAL_TO_STRING(rTotalApparentEnergy), ',');
-		SQLStatement[10] :=  CONCAT(BOOL_TO_STRING(xRotatingField), ',');
 
-		SQLStatement[11] :=  CONCAT(REAL_TO_STRING(arFrequency[1]), ',');
-		SQLStatement[12] :=  CONCAT(REAL_TO_STRING(arFrequency[2]), ',');
-		SQLStatement[13] :=  CONCAT(REAL_TO_STRING(arFrequency[3]), ',');
+		SQLStatement[3] :=  CONCAT(REAL_TO_STRING(rTotalApparentPower), ',');
+		SQLStatement[4] :=  CONCAT(REAL_TO_STRING(rTotalPowerFactorPF), ',');
 
-		SQLStatement[14] :=  CONCAT(REAL_TO_STRING( arVoltage_L_N[1] ), ',');
-		SQLStatement[15] :=  CONCAT(REAL_TO_STRING( arVoltage_L_N[2] ), ',');
-		SQLStatement[16] :=  CONCAT(REAL_TO_STRING( arVoltage_L_N[3] ), ',');
+		SQLStatement[5] :=  CONCAT(REAL_TO_STRING(arFrequency[1]), ',');
+		SQLStatement[6] :=  CONCAT(REAL_TO_STRING(arFrequency[2]), ',');
+		SQLStatement[7] :=  CONCAT(REAL_TO_STRING(arFrequency[3]), ',');
 
-		SQLStatement[17] :=  CONCAT(REAL_TO_STRING(arCurrent[1] ), ',');
-		SQLStatement[18] :=  CONCAT(REAL_TO_STRING(arCurrent[2]), ',');
-		SQLStatement[19] :=  CONCAT(REAL_TO_STRING(arCurrent[3]), ',');
+		SQLStatement[8] :=  CONCAT(REAL_TO_STRING( arVoltage_L_N[1] ), ',');
+		SQLStatement[9] :=  CONCAT(REAL_TO_STRING( arVoltage_L_N[2] ), ',');
+		SQLStatement[10] :=  CONCAT(REAL_TO_STRING( arVoltage_L_N[3] ), ',');
+
+		SQLStatement[11] :=  CONCAT(REAL_TO_STRING(arCurrent[1] ), ',');
+		SQLStatement[12] :=  CONCAT(REAL_TO_STRING(arCurrent[2]), ',');
+		SQLStatement[13] :=  CONCAT(REAL_TO_STRING(arCurrent[3]), ',');
 
 		(*  DC Values *)
-		SQLStatement[20] :=  CONCAT(REAL_TO_STRING(DCV1), ',');
-		SQLStatement[21] :=  CONCAT(REAL_TO_STRING(DCV2), ',');
+		SQLStatement[14] :=  CONCAT(REAL_TO_STRING(DCV1), ',');
+		SQLStatement[15] :=  CONCAT(REAL_TO_STRING(DCV2), ',');
 
-		SQLStatement[22] :=  CONCAT(REAL_TO_STRING(DCCurr2), ',');
-		SQLStatement[23] :=  CONCAT(REAL_TO_STRING(DCCurr2), ',');
+		SQLStatement[16] :=  CONCAT(REAL_TO_STRING(DCCurr2), ',');
+		SQLStatement[17] :=  CONCAT(REAL_TO_STRING(DCCurr2), ',');
 
-		SQLStatement[24] :=  CONCAT(REAL_TO_STRING(DCPower1), ',');
-		SQLStatement[25] :=  CONCAT(REAL_TO_STRING(DCPower1), ',');
+		SQLStatement[18] :=  CONCAT(REAL_TO_STRING(DCPower1), ',');
+		SQLStatement[19] :=  CONCAT(REAL_TO_STRING(DCPower1), ',');
 
-		SQLStatement[26] :=  CONCAT(INT_TO_STRING(iSiteCode), ' )' );
+
+		SQLStatement[20] :=  CONCAT(INT_TO_STRING(iSiteCode), ' ,' );
+		SQLStatement[21] :=  CONCAT(REAL_TO_STRING(arPower[1] ), ',');
+		SQLStatement[22] :=  CONCAT(REAL_TO_STRING(arPower[2]), ',');
+		(* TODO add in load shedding and  genset values*)
+
+		SQLStatement[23] :=  CONCAT(REAL_TO_STRING(arPower[3]), ')');
+
 
 
 END_FUNCTION
@@ -1595,23 +1132,33 @@ TYPE DataPoint :
 		timeStamp: STRING;
 
 		(*AC Variables*)
+		(*
 		rTotalActivePower:REAL;
 		rTotalReactivePower:REAL;
+		*)
 		rTotalApparentPower:REAL;
-	      rTotalPowerFactorPF:REAL;
+		rTotalPowerFactorPF:REAL;
+		(*
 		rTotalActiveEnergy:REAL;
 		rTotalReactiveEnergy:REAL;
 		rTotalApparentEnergy:REAL;
 		xRotatingField:BOOL;
+		*)
+		(*Line one*)
 		arFrequency_1:REAL;
 		arVoltage_L_N_1:REAL;
 		arCurrent_1:REAL;
+		arPower_1:REAL;
+		(*Line two*)
 		arFrequency_2:REAL;
 		arVoltage_L_N_2:REAL;
 		arCurrent_2:REAL;
+		arPower_2:REAL;
+		(*Line three*)
 		arFrequency_3:REAL;
 		arVoltage_L_N_3:REAL;
 		arCurrent_3:REAL;
+		arPower_3:REAL;
 
 		(* DC Variables *)
 		DCV1 :REAL;
@@ -1674,9 +1221,11 @@ VAR_GLOBAL
 	gv_iBuffPointer			:INT := 0; (* pointer  for  buffer*)
 	gv_Buffer					:ARRAY[0..gc_MaxBufferSize] OF DataPoint; (*In memory buffer of failed message attempts*)
 	gv_isGenSetON                 :BOOL := FALSE;
+	gv_isLoadShedON            :BOOL := FALSE;
 	gv_DCGenCycleCount     : INT :=0 ;
-	gv_statusRELAY1 AT %QX60.0: BOOL;
-	gv_statusRELAY2 AT %QX60.1: BOOL;
+	gv_DCLoadCycleCount     : INT :=0 ;
+	gv_statusRELAY1 AT %QX60.0: BOOL; (*use for genset*)
+	gv_statusRELAY2 AT %QX60.1: BOOL; (*use fore load shedding *)
 
 END_VAR
 VAR_GLOBAL CONSTANT
@@ -1699,12 +1248,15 @@ VAR_GLOBAL CONSTANT
 	raw_SQL_STR_LENGTH: INT := 350;
 
 	(* MYSQL configs *)
+	(* MYSQL configs  dummy *)
+
 	gc_sHost : STRING := '### your mysql server address here';  (*'application.dyndns.info';*)
 	gc_uiPort : UINT := 3306;
 	gc_sUser : STRING := '### your mysql server username ';
 	gc_sPwd : STRING := '### your mysql password';
 	gc_sDB : STRING := '### your MYSQL database';   	(* Optional - Name of database instance to connect to *)
 	gc_sTable:STRING := '### your MYSql table' ;
+
 
 	(* CSV Writing/Logging parameters*)
 	gc_xWriteToSD: BOOL := TRUE;
@@ -1716,15 +1268,22 @@ VAR_GLOBAL CONSTANT
 	gc_sFileName		: STRING := 'buffer.csv'; (* Working Filename   Complete path + filename *)
 
 	(* Logging constants*)
-	gc_LogInterval             :TIME := T#10s;
+	gc_LogInterval             :TIME := T#1s;
 	gc_iTotalParams		:INT := 18;
 
 	(* generator constants*)
-	gc_DCVoltageGenSetON :REAL := 24; (*make this a bit higher tha load shedding time*)
-	gc_DCVoltageGenSetOFF :REAL := 26; (*make this estimate soc %80*)
+	gc_DCVoltageGenSetON :REAL := 22; (*make this a bit higher tha load shedding time*)
+	gc_DCVoltageGenSetOFF :REAL := 25; (*make this estimate soc %80*)
 
 	(*how many cycles do we wait before we trigger the genset need to calculate based no cycletime *gc_DCGenCycleCount = total_seconds  *)
 	gc_DCGenCycleCount       :INT := 40;
+
+	(* load shedding paramters Load shedding will shut off loads when the batter falls below a certain voltage*)
+	gc_LoadSheddingVoltageON  :INT := 22;
+	gc_LoadSheddingVoltageOFF  :INT := 24;
+
+	gc_DCLoadCycleCount       :INT := 40;
+
 
 END_VAR
 
